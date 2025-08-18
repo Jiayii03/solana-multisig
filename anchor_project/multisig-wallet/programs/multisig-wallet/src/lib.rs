@@ -9,7 +9,7 @@ use instructions::*;
 use state::*;
 use errors::*;
 
-declare_id!("35QKMhSqHXEm4NamvyHiTH5DLCvkZKC6h3tqxmXZvAM1");
+declare_id!("E2Qi8w3Fz3SduddbegzS1SVAjogPae6AceUGmTwkCRez");
 
 #[program]
 pub mod multisig_wallet {
