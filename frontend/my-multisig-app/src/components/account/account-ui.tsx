@@ -1,7 +1,20 @@
+'use client'
+
+import { useWallet } from '@solana/wallet-adapter-react'
+import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js'
 import { RefreshCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { ExplorerLink } from '@/components/cluster/cluster-ui'
+
+import { useCluster } from '../cluster/cluster-data-access'
+import { ExplorerLink } from '../cluster/cluster-ui'
+import {
+  useGetBalance,
+  useGetSignatures,
+  useGetTokenAccounts,
+  useRequestAirdrop,
+  useTransferSol,
+} from './account-data-access'
 import { ellipsify } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { AppAlert } from '@/components/app-alert'
@@ -9,44 +22,34 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AppModal } from '@/components/app-modal'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useWalletUi } from '@wallet-ui/react'
-import { address, Address, Lamports, lamportsToSol } from 'gill'
-import { ErrorBoundary } from 'next/dist/client/components/error-boundary'
-import {
-  useGetBalanceQuery,
-  useGetSignaturesQuery,
-  useGetTokenAccountsQuery,
-  useRequestAirdropMutation,
-  useTransferSolMutation,
-} from './account-data-access'
 
-export function AccountBalance({ address }: { address: Address }) {
-  const query = useGetBalanceQuery({ address })
+export function AccountBalance({ address }: { address: PublicKey }) {
+  const query = useGetBalance({ address })
 
   return (
     <h1 className="text-5xl font-bold cursor-pointer" onClick={() => query.refetch()}>
-      {query.data?.value ? <BalanceSol balance={query.data?.value} /> : '...'} SOL
+      {query.data ? <BalanceSol balance={query.data} /> : '...'} SOL
     </h1>
   )
 }
 
 export function AccountChecker() {
-  const { account } = useWalletUi()
-  if (!account) {
+  const { publicKey } = useWallet()
+  if (!publicKey) {
     return null
   }
-  return <AccountBalanceCheck address={address(account.address)} />
+  return <AccountBalanceCheck address={publicKey} />
 }
 
-export function AccountBalanceCheck({ address }: { address: Address }) {
-  const { cluster } = useWalletUi()
-  const mutation = useRequestAirdropMutation({ address })
-  const query = useGetBalanceQuery({ address })
+export function AccountBalanceCheck({ address }: { address: PublicKey }) {
+  const { cluster } = useCluster()
+  const mutation = useRequestAirdrop({ address })
+  const query = useGetBalance({ address })
 
   if (query.isLoading) {
     return null
   }
-  if (query.isError || !query.data?.value) {
+  if (query.isError || !query.data) {
     return (
       <AppAlert
         action={
@@ -55,32 +58,29 @@ export function AccountBalanceCheck({ address }: { address: Address }) {
           </Button>
         }
       >
-        You are connected to <strong>{cluster.label}</strong> but your account is not found on this cluster.
+        You are connected to <strong>{cluster.name}</strong> but your account is not found on this cluster.
       </AppAlert>
     )
   }
   return null
 }
 
-export function AccountButtons({ address }: { address: Address }) {
-  const { cluster } = useWalletUi()
-
+export function AccountButtons({ address }: { address: PublicKey }) {
+  const { cluster } = useCluster()
   return (
     <div>
       <div className="space-x-2">
-        {cluster.id === 'solana:mainnet' ? null : <ModalAirdrop address={address} />}
-        <ErrorBoundary errorComponent={() => null}>
-          <ModalSend address={address} />
-        </ErrorBoundary>
+        {cluster.network?.includes('mainnet') ? null : <ModalAirdrop address={address} />}
+        <ModalSend address={address} />
         <ModalReceive address={address} />
       </div>
     </div>
   )
 }
 
-export function AccountTokens({ address }: { address: Address }) {
+export function AccountTokens({ address }: { address: PublicKey }) {
   const [showAll, setShowAll] = useState(false)
-  const query = useGetTokenAccountsQuery({ address })
+  const query = useGetTokenAccounts({ address })
   const client = useQueryClient()
   const items = useMemo(() => {
     if (showAll) return query.data
@@ -131,7 +131,7 @@ export function AccountTokens({ address }: { address: Address }) {
                     <TableCell>
                       <div className="flex space-x-2">
                         <span className="font-mono">
-                          <ExplorerLink label={ellipsify(pubkey.toString())} address={pubkey.toString()} />
+                          <ExplorerLink label={ellipsify(pubkey.toString())} path={`account/${pubkey.toString()}`} />
                         </span>
                       </div>
                     </TableCell>
@@ -140,7 +140,7 @@ export function AccountTokens({ address }: { address: Address }) {
                         <span className="font-mono">
                           <ExplorerLink
                             label={ellipsify(account.data.parsed.info.mint)}
-                            address={account.data.parsed.info.mint.toString()}
+                            path={`account/${account.data.parsed.info.mint.toString()}`}
                           />
                         </span>
                       </div>
@@ -169,8 +169,8 @@ export function AccountTokens({ address }: { address: Address }) {
   )
 }
 
-export function AccountTransactions({ address }: { address: Address }) {
-  const query = useGetSignaturesQuery({ address })
+export function AccountTransactions({ address }: { address: PublicKey }) {
+  const query = useGetSignatures({ address })
   const [showAll, setShowAll] = useState(false)
 
   const items = useMemo(() => {
@@ -211,15 +211,15 @@ export function AccountTransactions({ address }: { address: Address }) {
                 {items?.map((item) => (
                   <TableRow key={item.signature}>
                     <TableHead className="font-mono">
-                      <ExplorerLink transaction={item.signature} label={ellipsify(item.signature, 8)} />
+                      <ExplorerLink path={`tx/${item.signature}`} label={ellipsify(item.signature, 8)} />
                     </TableHead>
                     <TableCell className="font-mono text-right">
-                      <ExplorerLink block={item.slot.toString()} label={item.slot.toString()} />
+                      <ExplorerLink path={`block/${item.slot}`} label={item.slot.toString()} />
                     </TableCell>
-                    <TableCell>{new Date((Number(item.blockTime) ?? 0) * 1000).toISOString()}</TableCell>
+                    <TableCell>{new Date((item.blockTime ?? 0) * 1000).toISOString()}</TableCell>
                     <TableCell className="text-right">
                       {item.err ? (
-                        <span className="text-red-500" title={JSON.stringify(item.err)}>
+                        <span className="text-red-500" title={item.err.toString()}>
                           Failed
                         </span>
                       ) : (
@@ -246,11 +246,11 @@ export function AccountTransactions({ address }: { address: Address }) {
   )
 }
 
-function BalanceSol({ balance }: { balance: Lamports }) {
-  return <span>{lamportsToSol(balance)}</span>
+function BalanceSol({ balance }: { balance: number }) {
+  return <span>{Math.round((balance / LAMPORTS_PER_SOL) * 100000) / 100000}</span>
 }
 
-function ModalReceive({ address }: { address: Address }) {
+function ModalReceive({ address }: { address: PublicKey }) {
   return (
     <AppModal title="Receive">
       <p>Receive assets by sending them to your public key:</p>
@@ -259,8 +259,8 @@ function ModalReceive({ address }: { address: Address }) {
   )
 }
 
-function ModalAirdrop({ address }: { address: Address }) {
-  const mutation = useRequestAirdropMutation({ address })
+function ModalAirdrop({ address }: { address: PublicKey }) {
+  const mutation = useRequestAirdrop({ address })
   const [amount, setAmount] = useState('2')
 
   return (
@@ -285,12 +285,13 @@ function ModalAirdrop({ address }: { address: Address }) {
   )
 }
 
-function ModalSend(props: { address: Address }) {
-  const mutation = useTransferSolMutation({ address: props.address })
+function ModalSend({ address }: { address: PublicKey }) {
+  const wallet = useWallet()
+  const mutation = useTransferSol({ address })
   const [destination, setDestination] = useState('')
   const [amount, setAmount] = useState('1')
 
-  if (!props.address) {
+  if (!address || !wallet.sendTransaction) {
     return <div>Wallet not connected</div>
   }
 
@@ -299,9 +300,9 @@ function ModalSend(props: { address: Address }) {
       title="Send"
       submitDisabled={!destination || !amount || mutation.isPending}
       submitLabel="Send"
-      submit={async () => {
-        await mutation.mutateAsync({
-          destination: address(destination),
+      submit={() => {
+        mutation.mutateAsync({
+          destination: new PublicKey(destination),
           amount: parseFloat(amount),
         })
       }}

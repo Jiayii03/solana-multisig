@@ -1,20 +1,24 @@
-import { assertIsAddress } from 'gill'
+'use client'
+
+import { PublicKey } from '@solana/web3.js'
 import { useMemo } from 'react'
 import { useParams } from 'next/navigation'
-import { ExplorerLink } from '@/components/cluster/cluster-ui'
-import { AppHero } from '@/components/app-hero'
+import { ExplorerLink } from '../cluster/cluster-ui'
+import { AccountBalance, AccountButtons, AccountTokens, AccountTransactions } from './account-ui'
+import { AppHero } from '../app-hero'
 import { ellipsify } from '@/lib/utils'
 
-import { AccountBalance, AccountButtons, AccountTokens, AccountTransactions } from './account-ui'
-
-export default function AccountFeatureDetail() {
+export default function AccountDetailFeature() {
   const params = useParams()
   const address = useMemo(() => {
-    if (!params.address || typeof params.address !== 'string') {
+    if (!params.address) {
       return
     }
-    assertIsAddress(params.address)
-    return params.address
+    try {
+      return new PublicKey(params.address)
+    } catch (e) {
+      console.log(`Invalid public key`, e)
+    }
   }, [params])
   if (!address) {
     return <div>Error loading account</div>
@@ -26,7 +30,7 @@ export default function AccountFeatureDetail() {
         title={<AccountBalance address={address} />}
         subtitle={
           <div className="my-4">
-            <ExplorerLink address={address.toString()} label={ellipsify(address.toString())} />
+            <ExplorerLink path={`account/${address}`} label={ellipsify(address.toString())} />
           </div>
         }
       >
