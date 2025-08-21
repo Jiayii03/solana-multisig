@@ -1,7 +1,7 @@
 # Project Description
 
-**Deployed Frontend URL:** https://ackee-solana-multisig.vercel.app/
-
+**Deployed Frontend URL:** https://www.buidll.xyz
+                           
 **Solana Program ID:** E2Qi8w3Fz3SduddbegzS1SVAjogPae6AceUGmTwkCRez
 
 ## Project Overview
