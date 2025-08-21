@@ -3,32 +3,34 @@
 import { AppHero } from '@/components/app-hero'
 import { WalletButton } from '@/components/solana/solana-provider'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { useConnection } from '@solana/wallet-adapter-react'
-import { PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js'
+import { PublicKey, SystemProgram } from '@solana/web3.js'
 import { useState } from 'react'
+import { Program, AnchorProvider } from '@coral-xyz/anchor'
+import { useAnchorWallet, useConnection } from '@solana/wallet-adapter-react'
+import type { MultisigWallet } from '../../types/multisig_wallet'
+import idl from '../../../assets/multisig_wallet.json'
 
-// Program ID from your IDL
-const PROGRAM_ID = new PublicKey('E2Qi8w3Fz3SduddbegzS1SVAjogPae6AceUGmTwkCRez')
-
-// Instruction discriminator for create_wallet
-const CREATE_WALLET_DISCRIMINATOR = Buffer.from([82, 172, 128, 18, 161, 207, 88, 63])
-
-const links: { label: string; href: string }[] = [
-  { label: 'Solana Docs', href: 'https://docs.solana.com/' },
-  { label: 'Solana Faucet', href: 'https://faucet.solana.com/' },
-  { label: 'Solana Cookbook', href: 'https://solana.com/developers/cookbook/' },
-  { label: 'Solana Stack Overflow', href: 'https://solana.stackexchange.com/' },
-  { label: 'Solana Developers GitHub', href: 'https://github.com/solana-developers/' },
-]
+// Create the Anchor program instance
+function getProgram(connection: any, wallet: any) {
+  const provider = new AnchorProvider(connection, wallet, {
+    commitment: 'confirmed'
+  })
+  
+  return new Program(idl as MultisigWallet, provider)
+}
 
 export function DashboardFeature() {
-  const { publicKey, sendTransaction } = useWallet()
+  const { publicKey } = useWallet()
   const { connection } = useConnection()
+  const wallet = useAnchorWallet()
   const [loading, setLoading] = useState(false)
   const [owners, setOwners] = useState('')
   const [threshold, setThreshold] = useState(2)
   const [status, setStatus] = useState<string>('')
   const [logs, setLogs] = useState<string[]>([])
+
+  // Get the Anchor program instance
+  const program = wallet ? getProgram(connection, wallet) : null
 
   const addLog = (message: string) => {
     console.log(message)
@@ -36,7 +38,7 @@ export function DashboardFeature() {
   }
 
   const createWallet = async () => {
-    if (!publicKey || !sendTransaction) {
+    if (!publicKey || !wallet || !program) {
       setStatus('Please connect your wallet first')
       return
     }
@@ -51,178 +53,94 @@ export function DashboardFeature() {
     setLogs([])
     
     try {
-      addLog('=== Starting Multisig Wallet Creation ===')
+      addLog('=== 🚀 Starting Anchor Multisig Wallet Creation ===')
       addLog(`Connected wallet: ${publicKey.toBase58()}`)
-      addLog(`Connection endpoint: ${connection.rpcEndpoint}`)
+      addLog(`Using connection: ${connection.rpcEndpoint}`)
       
       // Parse owner addresses
-      const ownerAddresses = owners.split(',').map(addr => new PublicKey(addr.trim()))
-      addLog(`Parsed ${ownerAddresses.length} owners: ${ownerAddresses.map(o => o.toBase58()).join(', ')}`)
+      const ownerAddresses = owners.split(',').map(addr => {
+        const trimmed = addr.trim()
+        try {
+          return new PublicKey(trimmed)
+        } catch (e) {
+          throw new Error(`Invalid public key: ${trimmed}`)
+        }
+      })
       
-      // Validate we have 2-10 owners
+      addLog(`Parsed ${ownerAddresses.length} owners`)
+      
+      // Validations
       if (ownerAddresses.length < 2 || ownerAddresses.length > 10) {
         throw new Error('Must have between 2 and 10 owners')
       }
-
-      // Validate threshold
       if (threshold < 1 || threshold > ownerAddresses.length) {
         throw new Error('Threshold must be between 1 and number of owners')
       }
-
-      // Validate owners are not the program ID
-      const invalidOwners = ownerAddresses.filter(owner => owner.equals(PROGRAM_ID))
-      if (invalidOwners.length > 0) {
-        throw new Error('Program ID cannot be an owner. Please use valid wallet addresses only.')
-      }
       
-      addLog(`Threshold set to: ${threshold}`)
+      addLog(`Threshold: ${threshold}`)
 
-      // Find wallet PDA
+      // Find wallet PDA using the program
       const [walletPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('multisig_wallet'), publicKey.toBuffer()],
-        PROGRAM_ID
+        program.programId
       )
       addLog(`Wallet PDA: ${walletPda.toBase58()}`)
-      addLog(`Program ID: ${PROGRAM_ID.toBase58()}`)
 
-      // Serialize instruction data
-      const ownersCount = ownerAddresses.length
-      const buffer = Buffer.alloc(4 + (ownersCount * 32) + 1)
-      
-      let offset = 0
-      buffer.writeUInt32LE(ownersCount, offset)
-      offset += 4
-      
-      ownerAddresses.forEach(owner => {
-        owner.toBuffer().copy(buffer, offset)
-        offset += 32
-      })
-      
-      buffer.writeUInt8(threshold, offset)
-      
-      addLog(`Serialized data length: ${buffer.length} bytes`)
-      addLog(`Instruction discriminator: [${Array.from(CREATE_WALLET_DISCRIMINATOR).join(', ')}]`)
+      // Check if wallet already exists using raw account check
+      const existingAccount = await connection.getAccountInfo(walletPda)
+      if (existingAccount) {
+        throw new Error('Multisig wallet already exists for this payer')
+      }
+      addLog('✅ Wallet PDA available')
 
-      // Create instruction
-      const instruction = new TransactionInstruction({
-        keys: [
-          { pubkey: walletPda, isSigner: false, isWritable: true },
-          { pubkey: publicKey, isSigner: true, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-        ],
-        programId: PROGRAM_ID,
-        data: Buffer.concat([CREATE_WALLET_DISCRIMINATOR, buffer])
-      })
+      addLog('🏗️ Building transaction with Anchor...')
       
-      addLog('Created transaction instruction')
-      addLog(`Instruction keys: ${instruction.keys.map(k => `${k.pubkey.toBase58()} (writable: ${k.isWritable}, signer: ${k.isSigner})`).join(', ')}`)
+      // Use Anchor's simple methods API - this is the magic!
+      addLog('📡 Sending transaction with Anchor...')
+      const txSignature = await program.methods
+        .createWallet(ownerAddresses, threshold)
+        .accounts({
+          wallet: walletPda,
+          payer: publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc()
 
-      // Create and send transaction
-      const transaction = new Transaction().add(instruction)
+      addLog(`✅ Transaction sent! Signature: ${txSignature}`)
+      addLog('=== 🎉 WALLET CREATED SUCCESSFULLY! ===')
+      addLog(`🔗 Explorer: https://explorer.solana.com/tx/${txSignature}?cluster=devnet`)
+      addLog(`📍 Wallet PDA: ${walletPda.toBase58()}`)
+      setStatus(`🎉 Multisig wallet created successfully! Signature: ${txSignature}`)
       
-      // Set fee payer and recent blockhash
-      transaction.feePayer = publicKey
-      const { blockhash } = await connection.getLatestBlockhash()
-      transaction.recentBlockhash = blockhash
-      
-      addLog('Created transaction, sending...')
-      addLog(`Fee payer: ${transaction.feePayer?.toBase58()}`)
-      addLog(`Recent blockhash: ${transaction.recentBlockhash}`)
-      
-      // Simulate transaction first to catch errors
-      addLog('Simulating transaction...')
+      // Verify the wallet was created by checking the account
       try {
-        const simulation = await connection.simulateTransaction(transaction)
-        addLog(`Simulation result: ${JSON.stringify(simulation)}`)
-        
-        if (simulation.value.err) {
-          throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`)
+        const createdAccount = await connection.getAccountInfo(walletPda)
+        if (createdAccount) {
+          addLog(`✅ Wallet verification: Account created with ${createdAccount.data.length} bytes`)
+        } else {
+          addLog(`⚠️ Could not verify wallet creation - account not found`)
         }
-        
-        addLog('Simulation successful, sending transaction...')
-      } catch (simError) {
-        addLog(`Simulation error: ${simError}`)
-        throw simError
+      } catch (fetchError) {
+        addLog(`⚠️ Could not verify wallet creation: ${fetchError}`)
       }
       
-      const signature = await sendTransaction(transaction, connection)
-      addLog(`Transaction sent! Signature: ${signature}`)
+      // Clear form
+      setOwners('')
+      setThreshold(2)
       
-      // Wait for confirmation with multiple strategies
-      addLog('Waiting for confirmation...')
+    } catch (error: any) {
+      const errorMsg = error.message || `${error}`
+      addLog(`❌ ERROR: ${errorMsg}`)
+      setStatus(`❌ Error: ${errorMsg}`)
       
-      try {
-        // Try fast confirmation first
-        const confirmation = await connection.confirmTransaction(signature, 'confirmed')
-        addLog(`Confirmation status: ${JSON.stringify(confirmation)}`)
-        
-        if (confirmation.value.err) {
-          throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`)
-        }
-        
-        addLog('=== Wallet Created Successfully! ===')
-        setStatus(`Multisig wallet created successfully! Signature: ${signature}`)
-        
-        // Clear form
-        setOwners('')
-        setThreshold(2)
-      } catch (confirmError) {
-        // If confirmation times out, check transaction status manually
-        addLog(`Confirmation failed: ${confirmError}`)
-        addLog('Checking transaction status manually...')
-        
-        try {
-          // Wait a bit more and check again
-          await new Promise(resolve => setTimeout(resolve, 5000))
-          
-          const txStatus = await connection.getSignatureStatus(signature)
-          addLog(`Transaction status: ${JSON.stringify(txStatus)}`)
-          
-          if (txStatus.value?.err) {
-            throw new Error(`Transaction failed: ${JSON.stringify(txStatus.value.err)}`)
-          }
-          
-          if (txStatus.value?.confirmationStatus === 'confirmed' || txStatus.value?.confirmationStatus === 'finalized') {
-            addLog('=== Wallet Created Successfully! ===')
-            setStatus(`Multisig wallet created successfully! Signature: ${signature}`)
-            setOwners('')
-            setThreshold(2)
-          } else {
-            // Try to get transaction details to see what happened
-            addLog('Getting transaction details...')
-            try {
-              const txDetails = await connection.getTransaction(signature, {
-                commitment: 'confirmed',
-                maxSupportedTransactionVersion: 0
-              })
-              addLog(`Transaction details: ${JSON.stringify(txDetails)}`)
-              
-              if (txDetails?.meta?.err) {
-                throw new Error(`Transaction failed: ${JSON.stringify(txDetails.meta.err)}`)
-              }
-              
-              if (txDetails?.meta) {
-                addLog('=== Wallet Created Successfully! ===')
-                setStatus(`Multisig wallet created successfully! Signature: ${signature}`)
-                setOwners('')
-                setThreshold(2)
-              } else {
-                throw new Error(`Transaction not found or not confirmed`)
-              }
-            } catch (txError) {
-              addLog(`Transaction details error: ${txError}`)
-              throw new Error(`Transaction may have failed. Check signature ${signature} on Solana Explorer`)
-            }
-          }
-        } catch (statusError) {
-          addLog(`Status check failed: ${statusError}`)
-          throw new Error(`Transaction may have failed. Check signature ${signature} on Solana Explorer`)
-        }
+      // Try to extract more specific error information from Anchor
+      if (error.error && error.error.errorMessage) {
+        addLog(`Anchor error: ${error.error.errorMessage}`)
       }
-    } catch (error) {
-      const errorMsg = `Error creating wallet: ${error}`
-      addLog(`ERROR: ${errorMsg}`)
-      setStatus(errorMsg)
+      if (error.logs) {
+        addLog(`Transaction logs: ${error.logs.join(' | ')}`)
+      }
+      
       console.error('Error creating wallet:', error)
     } finally {
       setLoading(false)
@@ -231,9 +149,18 @@ export function DashboardFeature() {
 
   return (
     <div>
-      <AppHero title="Multisig Wallet" subtitle="Create and manage secure collaborative wallets" />
+      <AppHero title="🔐 Anchor Multisig Wallet" subtitle="Easy multisig wallet creation using Coral XYZ Anchor" />
       
       <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
+        {/* Anchor Integration Notice */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+          <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">⚓ Anchor Integration</h3>
+          <p className="text-blue-700 dark:text-blue-300 text-sm">
+            Now using the official @coral-xyz/anchor client library for seamless Solana program interaction.
+            This provides automatic instruction building, account resolution, and error handling.
+          </p>
+        </div>
+
         {/* Wallet Connection */}
         <div className="flex justify-center">
           <WalletButton />
@@ -252,7 +179,7 @@ export function DashboardFeature() {
                 <textarea
                   className="w-full p-3 border rounded-md dark:bg-gray-800"
                   placeholder={`${publicKey.toBase58()}, [other owner addresses...]`}
-                  value={owners}
+                  value={owners || publicKey.toBase58()}
                   onChange={(e) => setOwners(e.target.value)}
                   rows={3}
                 />
@@ -280,10 +207,10 @@ export function DashboardFeature() {
               
               <button
                 onClick={createWallet}
-                disabled={loading || !owners.trim()}
+                disabled={loading || !owners.trim() || !program}
                 className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Creating Wallet...' : 'Create Multisig Wallet'}
+                {loading ? '⚓ Creating with Anchor...' : '⚓ Create Multisig Wallet'}
               </button>
             </div>
           </div>
@@ -300,7 +227,7 @@ export function DashboardFeature() {
         {/* Console Logs */}
         {logs.length > 0 && (
           <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm">
-            <h3 className="font-semibold mb-2">Console Logs</h3>
+            <h3 className="font-semibold mb-2">Anchor Logs</h3>
             <div className="space-y-1 max-h-96 overflow-y-auto">
               {logs.map((log, index) => (
                 <div key={index} className="whitespace-pre-wrap">{log}</div>
@@ -308,25 +235,7 @@ export function DashboardFeature() {
             </div>
           </div>
         )}
-
-        {/* Helpful Links */}
-        <div className="text-center">
-          <p className="text-gray-600 dark:text-gray-400 mb-4">Here are some helpful links to get you started.</p>
-          <div className="space-y-2">
-            {links.map((link, index) => (
-              <div key={index}>
-                <a
-                  href={link.href}
-                  className="hover:text-gray-500 dark:hover:text-gray-300"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {link.label}
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
+        
       </div>
     </div>
   )

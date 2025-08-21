@@ -1,0 +1,417 @@
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/multisig_wallet.json`.
+ */
+export type MultisigWallet = {
+  "address": "E2Qi8w3Fz3SduddbegzS1SVAjogPae6AceUGmTwkCRez",
+  "metadata": {
+    "name": "multisigWallet",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "A secure multisig wallet on Solana"
+  },
+  "instructions": [
+    {
+      "name": "approveTransaction",
+      "discriminator": [
+        224,
+        39,
+        88,
+        181,
+        36,
+        59,
+        155,
+        122
+      ],
+      "accounts": [
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "wallet"
+        },
+        {
+          "name": "approver",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancelTransaction",
+      "discriminator": [
+        65,
+        191,
+        19,
+        127,
+        230,
+        26,
+        214,
+        142
+      ],
+      "accounts": [
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "wallet"
+        },
+        {
+          "name": "canceller",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "createWallet",
+      "discriminator": [
+        82,
+        172,
+        128,
+        18,
+        161,
+        207,
+        88,
+        63
+      ],
+      "accounts": [
+        {
+          "name": "wallet",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  117,
+                  108,
+                  116,
+                  105,
+                  115,
+                  105,
+                  103,
+                  95,
+                  119,
+                  97,
+                  108,
+                  108,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "owners",
+          "type": {
+            "vec": "pubkey"
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "executeTransaction",
+      "discriminator": [
+        231,
+        173,
+        49,
+        91,
+        235,
+        24,
+        68,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "walletAccount",
+          "writable": true
+        },
+        {
+          "name": "recipient",
+          "writable": true
+        },
+        {
+          "name": "executor",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "proposeTransaction",
+      "discriminator": [
+        35,
+        204,
+        169,
+        240,
+        74,
+        70,
+        31,
+        236
+      ],
+      "accounts": [
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  110,
+                  115,
+                  97,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wallet"
+              },
+              {
+                "kind": "account",
+                "path": "wallet.nonce",
+                "account": "multisigWallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "wallet",
+          "writable": true
+        },
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "recipient",
+          "type": "pubkey"
+        },
+        {
+          "name": "expiresInHours",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "multisigWallet",
+      "discriminator": [
+        32,
+        135,
+        234,
+        172,
+        132,
+        39,
+        242,
+        66
+      ]
+    },
+    {
+      "name": "transactionProposal",
+      "discriminator": [
+        39,
+        205,
+        202,
+        42,
+        47,
+        200,
+        144,
+        95
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "invalidThreshold",
+      "msg": "Invalid threshold: must be greater than 0 and less than or equal to number of owners"
+    },
+    {
+      "code": 6001,
+      "name": "ownerNotFound",
+      "msg": "Owner not found in wallet"
+    },
+    {
+      "code": 6002,
+      "name": "insufficientApprovals",
+      "msg": "Insufficient approvals"
+    },
+    {
+      "code": 6003,
+      "name": "alreadyExecuted",
+      "msg": "Transaction already executed"
+    },
+    {
+      "code": 6004,
+      "name": "alreadyCancelled",
+      "msg": "Transaction already cancelled"
+    },
+    {
+      "code": 6005,
+      "name": "transactionExpired",
+      "msg": "Transaction expired"
+    },
+    {
+      "code": 6006,
+      "name": "invalidOwnerList",
+      "msg": "Invalid owner list: must have 2-10 owners"
+    },
+    {
+      "code": 6007,
+      "name": "insufficientFunds",
+      "msg": "Insufficient funds"
+    }
+  ],
+  "types": [
+    {
+      "name": "multisigWallet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owners",
+            "type": {
+              "array": [
+                "pubkey",
+                10
+              ]
+            }
+          },
+          {
+            "name": "ownerCount",
+            "type": "u8"
+          },
+          {
+            "name": "threshold",
+            "type": "u8"
+          },
+          {
+            "name": "nonce",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "transactionProposal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "approvals",
+            "type": {
+              "array": [
+                "bool",
+                10
+              ]
+            }
+          },
+          {
+            "name": "ownerCount",
+            "type": "u8"
+          },
+          {
+            "name": "executed",
+            "type": "bool"
+          },
+          {
+            "name": "cancelled",
+            "type": "bool"
+          },
+          {
+            "name": "expiresAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+};
