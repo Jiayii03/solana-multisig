@@ -10,7 +10,7 @@ export function AppHero({
   title?: React.ReactNode
 }) {
   return (
-    <div className="flex flex-row justify-center py-[16px] md:py-[64px]">
+    <div className="flex flex-row justify-center py-[30px] md:py-[20px]">
       <div className="text-center">
         <div className="max-w-2xl">
           {typeof title === 'string' ? <h1 className="text-5xl font-bold">{title}</h1> : title}
