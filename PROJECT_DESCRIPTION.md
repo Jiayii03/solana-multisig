@@ -1,16 +1,16 @@
 # Project Description
 
-**Deployed Frontend URL:** [TODO: Link to your deployed frontend]
+**Deployed Frontend URL:** https://ackee-solana-multisig.vercel.app/
 
 **Solana Program ID:** E2Qi8w3Fz3SduddbegzS1SVAjogPae6AceUGmTwkCRez
 
 ## Project Overview
 
 ### Description
-A simple yet complete decentralized multisig wallet application built on Solana Devnet using the Anchor framework. This dApp enables multiple users to collectively manage shared funds through a threshold-based approval system. Each multisig wallet requires a predetermined number of owner signatures to execute transactions, providing enhanced security for shared cryptocurrency holdings. 
+A simple yet complete decentralized multisig wallet application built on Solana Devnet using the Anchor framework. This dApp enables multiple users to collectively manage shared funds through a threshold-based approval system. Each multisig wallet requires a predetermined number of owner signatures to execute transactions, and an expiry time after which the transaction can no longer be approved.
 
 ### Key Features
-- **Create Multisig Wallet**: Initialize a new multisig wallet with 2-10 owners and customizable threshold
+- **Create Multisig Wallet**: Initialize a new multisig wallet with 2-10 owners, customizable threshold and expiry time.
 - **Propose Transaction**: Any owner can propose SOL transfers with expiration times
 - **Approve Transaction**: Owners can approve pending proposals with visual feedback
 - **Execute Transaction**: Execute approved transactions when threshold is met
